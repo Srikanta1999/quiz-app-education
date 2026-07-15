@@ -1,0 +1,63 @@
+[
+
+  {
+    "question": "What is the next prime number after 7?",
+    "correct_answer": "11",
+    "incorrect_answers": ["9", "10", "12"]
+  },
+  {
+    "question": "If 5 workers can finish a task in 4 days, how many days will 10 workers need to complete the same task?",
+    "correct_answer": "2",
+    "incorrect_answers": ["1", "4", "5"]
+  },
+  {
+    "question": "What is 15% of 200?",
+    "correct_answer": "30",
+    "incorrect_answers": ["25", "20", "35"]
+  },
+  {
+    "question": "What fraction is equal to 0.75?",
+    "correct_answer": "3/4",
+    "incorrect_answers": ["1/2", "2/3", "4/5"]
+  },
+  {
+    "question": "The average of five numbers is 12. If four numbers are 10, 14, 16 and 6, what is the fifth number?",
+    "correct_answer": "10",
+    "incorrect_answers": ["8", "12", "14"]
+  },
+  {
+    "question": "If the average of 8 numbers is 15 and one number is removed, the new average becomes 14. What is the removed number?",
+    "correct_answer": "23",
+    "incorrect_answers": ["22", "21", "24"]
+  },
+  {
+    "question": "The mean of three numbers is 18. If two of the numbers are 15 and 21, what is the third number?",
+    "correct_answer": "18",
+    "incorrect_answers": ["17", "19", "20"]
+  },
+  {
+    "question": "If the average of 10 values is 25 and one of them is 40, what is the average of the remaining 9 values?",
+    "correct_answer": "23",
+    "incorrect_answers": ["22", "24", "26"]
+  },
+  {
+    "question": "A milk mixture contains milk and water in the ratio 5:2. If 14 liters of water is added, the ratio becomes 5:4. How many liters of milk were there originally?",
+    "correct_answer": "35",
+    "incorrect_answers": ["28", "30", "32"]
+  },
+  {
+    "question": "In a mixture, alcohol and water are in ratio 3:2. If 10 liters of water is added, the ratio becomes 3:4. What is the quantity of alcohol in the original mixture?",
+    "correct_answer": "30",
+    "incorrect_answers": ["20", "25", "35"]
+  },
+  {
+    "question": "A merchant mixes two liquids priced at ₹40 and ₹70 to get a mixture worth ₹55. In what ratio are they mixed?",
+    "correct_answer": "3:2",
+    "incorrect_answers": ["2:3", "4:3", "1:1"]
+  },
+  {
+    "question": "If spirit containing 80% alcohol is mixed with spirit containing 50% alcohol to obtain 65% alcohol, what is the ratio of the first spirit to the second?",
+    "correct_answer": "5:7",
+    "incorrect_answers": ["7:5", "3:2", "2:3"]
+  }
+]
