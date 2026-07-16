@@ -234,7 +234,7 @@ const CameraCapture = ({ onCapture }) => {
 
     canvas.width = 0;
     canvas.height = 0;
-  }, [onCapture, stopCurrentStream, stream]);
+  }, [onCapture, stopCurrentStream]);
 
   useEffect(() => {
     if (!stream || !isVideoReady || capturedPhoto || autoCaptureStarted) return undefined;
