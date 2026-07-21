@@ -18,8 +18,6 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 5000;
-const BUSINESS_START_HOUR = 9;
-const BUSINESS_END_HOUR = 17;
 const rateLimitStore = new Map();
 
 const cleanupRateLimitStore = () => {
@@ -35,24 +33,6 @@ setInterval(cleanupRateLimitStore, 30 * 60 * 1000);
 const isLocalhostIp = ip => {
   if (!ip) return false;
   return ['::1', '127.0.0.1', '::ffff:127.0.0.1', 'localhost'].includes(ip);
-};
-
-const getServerTime = () => new Date();
-
-const isWithinBusinessHours = (date = getServerTime()) => {
-  const hour = date.getHours();
-  return hour >= BUSINESS_START_HOUR && hour < BUSINESS_END_HOUR;
-};
-
-const enforceBusinessHours = (req, res, next) => {
-  if (isWithinBusinessHours()) {
-    return next();
-  }
-
-  return res.status(403).json({
-    success: false,
-    error: 'The application is available only from 9:00 AM to 5:00 PM based on the server time.',
-  });
 };
 
 const rateLimiter = (req, res, next) => {
@@ -86,7 +66,7 @@ const rateLimiter = (req, res, next) => {
   next();
 };
 
-app.use(enforceBusinessHours);
+// Run without business-hours enforcement (24/7 availability)
 app.use(rateLimiter);
 
 // Simple request logger to help diagnose synchronization issues
