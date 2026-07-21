@@ -583,6 +583,15 @@ app.get('/api/export/csv', (req, res) => {
   res.send(csv);
 });
 
+// Serve React frontend build assets for any non-API requests.
+app.use(express.static(path.join(__dirname, 'build')));
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ success: false, error: 'API route not found.' });
+  }
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
+
 process.on('SIGINT', () => {
   db.close();
   process.exit(0);
