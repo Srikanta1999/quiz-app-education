@@ -2,14 +2,34 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const { Pool } = require('pg');
 const Database = require('better-sqlite3');
 
 const PORT = process.env.PORT || 5000;
 const DATA_FILE = path.join(__dirname, 'data.json');
 const DB_FILE = path.join(__dirname, 'quiz.db');
+const USE_POSTGRES = Boolean(process.env.DATABASE_URL);
 
 const app = express();
-const db = new Database(DB_FILE, { fileMustExist: false });
+let db;
+let pool;
+
+if (USE_POSTGRES) {
+  const poolConfig = {
+    connectionString: process.env.DATABASE_URL,
+  };
+
+  if (process.env.DB_SSL === 'true' || process.env.PGSSLMODE === 'require') {
+    poolConfig.ssl = {
+      rejectUnauthorized: false,
+    };
+  }
+
+  pool = new Pool(poolConfig);
+} else {
+  db = new Database(DB_FILE, { fileMustExist: false });
+}
+
 app.set('trust proxy', true);
 app.disable('x-powered-by');
 app.use(cors({ origin: true, credentials: true }));
@@ -95,7 +115,37 @@ const normalizeData = data => ({
   quizSessions: data?.quizSessions && typeof data.quizSessions === 'object' ? data.quizSessions : {},
 });
 
-const initializeDatabase = () => {
+const initializeDatabase = async () => {
+  if (USE_POSTGRES) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS app_data (
+        key TEXT PRIMARY KEY,
+        value JSONB NOT NULL
+      )
+    `);
+
+    const existingRow = await pool.query('SELECT value FROM app_data WHERE key = $1', ['main']);
+    if (existingRow.rows.length) {
+      return;
+    }
+
+    if (fs.existsSync(DATA_FILE)) {
+      try {
+        const content = fs.readFileSync(DATA_FILE, 'utf8');
+        if (content) {
+          const parsed = JSON.parse(content);
+          await saveData(normalizeData(parsed));
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to migrate legacy data.json to Postgres:', error);
+      }
+    }
+
+    await saveData(defaultData);
+    return;
+  }
+
   db.prepare(`
     CREATE TABLE IF NOT EXISTS app_data (
       key TEXT PRIMARY KEY,
@@ -113,7 +163,7 @@ const initializeDatabase = () => {
       const content = fs.readFileSync(DATA_FILE, 'utf8');
       if (content) {
         const parsed = JSON.parse(content);
-        saveData(normalizeData(parsed));
+        await saveData(normalizeData(parsed));
         return;
       }
     } catch (error) {
@@ -121,13 +171,27 @@ const initializeDatabase = () => {
     }
   }
 
-  saveData(defaultData);
+  await saveData(defaultData);
 };
 
-const loadData = () => {
+const loadData = async () => {
+  if (USE_POSTGRES) {
+    try {
+      const row = await pool.query('SELECT value FROM app_data WHERE key = $1', ['main']);
+      if (!row.rows.length) {
+        await initializeDatabase();
+        return normalizeData(defaultData);
+      }
+      return normalizeData(row.rows[0].value);
+    } catch (error) {
+      console.error('Failed to load Postgres data:', error);
+      return normalizeData(defaultData);
+    }
+  }
+
   const row = db.prepare('SELECT value FROM app_data WHERE key = ?').get('main');
   if (!row) {
-    initializeDatabase();
+    await initializeDatabase();
     return normalizeData(defaultData);
   }
 
@@ -139,19 +203,36 @@ const loadData = () => {
   }
 };
 
-const saveData = data => {
+const saveData = async data => {
   try {
     const normalizedData = normalizeData(data);
+
+    if (USE_POSTGRES) {
+      await pool.query(
+        'INSERT INTO app_data (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value',
+        ['main', normalizedData]
+      );
+      return;
+    }
+
     db.prepare('INSERT INTO app_data (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(
       'main',
       JSON.stringify(normalizedData, null, 2)
     );
   } catch (error) {
-    console.error('Failed to save data to SQLite:', error);
+    console.error('Failed to save data:', error);
   }
 };
 
-initializeDatabase();
+const startApp = async () => {
+  try {
+    await initializeDatabase();
+    startServer(PORT);
+  } catch (error) {
+    console.error('Database initialization failed:', error);
+    process.exit(1);
+  }
+};
 
 const findStudent = (data, registrationNo) =>
   data.students.find(student => student.registrationNo === registrationNo);
@@ -259,32 +340,32 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/api/quiz-settings', (req, res) => {
-  const data = loadData();
+app.get('/api/quiz-settings', async (req, res) => {
+  const data = await loadData();
   res.json({ quizSettings: data.quizSettings || defaultQuizSettings });
 });
 
-app.post('/api/quiz-settings', (req, res) => {
+app.post('/api/quiz-settings', async (req, res) => {
   const { quizSettings } = req.body;
 
   if (!Array.isArray(quizSettings)) {
     return res.status(400).json({ success: false, error: 'quizSettings must be an array.' });
   }
 
-  const data = loadData();
+  const data = await loadData();
   data.quizSettings = quizSettings;
-  saveData(data);
+  await saveData(data);
 
   res.json({ success: true, quizSettings: data.quizSettings });
 });
 
-app.get('/api/hods', (req, res) => {
-  const data = loadData();
+app.get('/api/hods', async (req, res) => {
+  const data = await loadData();
   res.json({ hods: data.hods || [] });
 });
 
-app.post('/api/hods', (req, res) => {
-  const data = loadData();
+app.post('/api/hods', async (req, res) => {
+  const data = await loadData();
   const { username, password, hods } = req.body;
   const added = [];
 
@@ -307,28 +388,28 @@ app.post('/api/hods', (req, res) => {
     return res.status(400).json({ success: false, error: 'username and password are required.' });
   }
 
-  saveData(data);
+  await saveData(data);
   res.json({ success: true, hods: data.hods, added });
 });
 
-app.delete('/api/hods/:username', (req, res) => {
-  const data = loadData();
+app.delete('/api/hods/:username', async (req, res) => {
+  const data = await loadData();
   const username = req.params.username;
   const index = data.hods.findIndex(hod => hod.username === username);
   if (index === -1) {
     return res.status(404).json({ success: false, error: 'HOD not found.' });
   }
   data.hods.splice(index, 1);
-  saveData(data);
+  await saveData(data);
   res.json({ success: true });
 });
 
-app.post('/api/hod-login', (req, res) => {
+app.post('/api/hod-login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ success: false, error: 'Username and password are required.' });
   }
-  const data = loadData();
+  const data = await loadData();
   const hod = findHod(data, username);
   if (!hod || hod.password !== password) {
     return res.status(401).json({ success: false, error: 'Invalid HOD credentials.' });
@@ -363,8 +444,8 @@ const CATEGORY_LABELS_BY_ID = {
   '32': 'Entertainment: Cartoon & Animations',
 };
 
-app.get('/api/students', (req, res) => {
-  const data = loadData();
+app.get('/api/students', async (req, res) => {
+  const data = await loadData();
   const { category, quizName } = req.query;
   let students = data.students || [];
 
@@ -393,20 +474,20 @@ app.get('/api/students', (req, res) => {
   res.json({ students });
 });
 
-app.get('/api/students/:registrationNo', (req, res) => {
-  const data = loadData();
+app.get('/api/students/:registrationNo', async (req, res) => {
+  const data = await loadData();
   const student = findStudent(data, req.params.registrationNo);
   res.json({ student: student || null });
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { name, registrationNo } = req.body;
 
   if (!name || !registrationNo) {
     return res.status(400).json({ success: false, error: 'Name and registration number are required.' });
   }
 
-  const data = loadData();
+  const data = await loadData();
   let student = findStudent(data, registrationNo);
 
   if (!student) {
@@ -422,13 +503,13 @@ app.post('/api/login', (req, res) => {
     student.logins = (student.logins || 0) + 1;
   }
 
-  saveData(data);
+  await saveData(data);
   const session = getQuizSession(data, registrationNo);
   res.json({ success: true, student, session });
 });
 
-app.get('/api/quiz-session/:registrationNo', (req, res) => {
-  const data = loadData();
+app.get('/api/quiz-session/:registrationNo', async (req, res) => {
+  const data = await loadData();
   const registrationNo = req.params.registrationNo;
   if (!registrationNo) {
     return res.status(400).json({ success: false, error: 'Registration number is required.' });
@@ -437,36 +518,36 @@ app.get('/api/quiz-session/:registrationNo', (req, res) => {
   res.json({ success: true, session });
 });
 
-app.post('/api/quiz-session', (req, res) => {
+app.post('/api/quiz-session', async (req, res) => {
   const { registrationNo, session } = req.body;
   if (!registrationNo || !session) {
     return res.status(400).json({ success: false, error: 'Registration number and session are required.' });
   }
-  const data = loadData();
+  const data = await loadData();
   setQuizSession(data, registrationNo, session);
-  saveData(data);
+  await saveData(data);
   res.json({ success: true, session });
 });
 
-app.delete('/api/quiz-session/:registrationNo', (req, res) => {
-  const data = loadData();
+app.delete('/api/quiz-session/:registrationNo', async (req, res) => {
+  const data = await loadData();
   const registrationNo = req.params.registrationNo;
   if (!registrationNo) {
     return res.status(400).json({ success: false, error: 'Registration number is required.' });
   }
   clearQuizSession(data, registrationNo);
-  saveData(data);
+  await saveData(data);
   res.json({ success: true });
 });
 
-app.post('/api/quiz-attempt', (req, res) => {
+app.post('/api/quiz-attempt', async (req, res) => {
   const { registrationNo, attempt, photo } = req.body;
 
   if (!registrationNo || !attempt) {
     return res.status(400).json({ success: false, error: 'Registration number and attempt are required.' });
   }
 
-  const data = loadData();
+  const data = await loadData();
   let student = findStudent(data, registrationNo);
 
   if (!student) {
@@ -486,19 +567,19 @@ app.post('/api/quiz-attempt', (req, res) => {
     }
   }
 
-  saveData(data);
+  await saveData(data);
   // Return the updated student record to help clients confirm synchronization
   res.json({ success: true, student });
 });
 
-app.post('/api/student-photo', (req, res) => {
+app.post('/api/student-photo', async (req, res) => {
   const { registrationNo, photo } = req.body;
 
   if (!registrationNo || !photo) {
     return res.status(400).json({ success: false, error: 'Registration number and photo are required.' });
   }
 
-  const data = loadData();
+  const data = await loadData();
   let student = findStudent(data, registrationNo);
 
   if (!student) {
@@ -514,12 +595,12 @@ app.post('/api/student-photo', (req, res) => {
     student.photo = photo;
   }
 
-  saveData(data);
+  await saveData(data);
   res.json({ success: true, student });
 });
 
-app.delete('/api/students/:registrationNo', (req, res) => {
-  const data = loadData();
+app.delete('/api/students/:registrationNo', async (req, res) => {
+  const data = await loadData();
   const registrationNo = decodeURIComponent(req.params.registrationNo || '');
 
   if (!registrationNo) {
@@ -533,30 +614,30 @@ app.delete('/api/students/:registrationNo', (req, res) => {
   }
 
   data.students.splice(index, 1);
-  saveData(data);
+  await saveData(data);
   res.json({ success: true });
 });
 
-app.delete('/api/students', (req, res) => {
-  const data = loadData();
+app.delete('/api/students', async (req, res) => {
+  const data = await loadData();
   data.students = [];
-  saveData(data);
+  await saveData(data);
   res.json({ success: true });
 });
 
-app.get('/api/export/summary', (req, res) => {
-  const data = loadData();
+app.get('/api/export/summary', async (req, res) => {
+  const data = await loadData();
   res.json({ summary: computeSummary(data) });
 });
 
-app.get('/api/export/json', (req, res) => {
-  const data = loadData();
+app.get('/api/export/json', async (req, res) => {
+  const data = await loadData();
   res.setHeader('Content-Disposition', 'attachment; filename="students.json"');
   res.json(data);
 });
 
-app.get('/api/export/csv', (req, res) => {
-  const data = loadData();
+app.get('/api/export/csv', async (req, res) => {
+  const data = await loadData();
   const csv = createCsv(data.students);
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="students.csv"');
@@ -572,13 +653,26 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
-process.on('SIGINT', () => {
-  db.close();
+const closeResources = async () => {
+  try {
+    if (USE_POSTGRES && pool) {
+      await pool.end();
+    }
+    if (!USE_POSTGRES && db) {
+      db.close();
+    }
+  } catch (error) {
+    console.error('Error closing resources:', error);
+  }
+};
+
+process.on('SIGINT', async () => {
+  await closeResources();
   process.exit(0);
 });
 
-process.on('SIGTERM', () => {
-  db.close();
+process.on('SIGTERM', async () => {
+  await closeResources();
   process.exit(0);
 });
 
@@ -600,4 +694,4 @@ const startServer = (port, attempt = 1) => {
   });
 };
 
-startServer(PORT);
+startApp();
