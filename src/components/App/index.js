@@ -24,7 +24,7 @@ import Result from '../Result';
 import CameraCapture from '../CameraCapture';
 
 import { CATEGORIES, NUM_OF_QUESTIONS, COUNTDOWN_TIME } from '../../constants';
-import { createRequestDeduper, shuffle, getCategoryLabel, getAttemptScoreText, getStudentAttemptDisplayData, buildApiUrl } from '../../utils';
+import { createRequestDeduper, shuffle, getCategoryLabel, getAttemptScoreText, buildApiUrl } from '../../utils';
 
 const defaultQuizSettings = [
   {
@@ -1269,8 +1269,13 @@ const AdminPanel = ({ history, onLogout, isOnline, apiUrl, studentPhotos, quizSe
                 <Table.Body>
                   {displayedStudents.map(student => {
                     const attempts = student.attempts || [];
-                    const displayData = getStudentAttemptDisplayData(student);
                     const last = attempts.length ? attempts[attempts.length - 1] : null;
+                    const fallbackCategory = last?.category ?? student.category ?? student.lastCategory;
+                    const fallbackScore = student.lastScoreText || getAttemptScoreText(last);
+                    const displayData = {
+                      category: getCategoryLabel(fallbackCategory),
+                      scoreText: fallbackScore || getAttemptScoreText(last),
+                    };
                     const lastScore = displayData.scoreText || getAttemptScoreText(last);
                     const photo = student.photo || (studentPhotos ? studentPhotos[student.registrationNo] : null);
 
