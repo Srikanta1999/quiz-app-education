@@ -237,6 +237,36 @@ const startApp = async () => {
 const findStudent = (data, registrationNo) =>
   data.students.find(student => student.registrationNo === registrationNo);
 
+const getAttemptScoreText = attempt => {
+  if (!attempt || typeof attempt !== 'object') return 'N/A';
+
+  const correctAnswers = attempt.correctAnswers ?? attempt.correct ?? attempt.score ?? attempt.correctCount;
+  const totalQuestions = attempt.totalQuestions ?? attempt.total ?? attempt.totalCount;
+
+  if (correctAnswers === undefined || totalQuestions === undefined || correctAnswers === null || totalQuestions === null) {
+    return 'N/A';
+  }
+
+  return `${correctAnswers}/${totalQuestions}`;
+};
+
+const enrichStudentWithAttemptMeta = student => {
+  if (!student || typeof student !== 'object') return student;
+
+  const attempts = Array.isArray(student.attempts) ? student.attempts : [];
+  const lastAttempt = attempts.length ? attempts[attempts.length - 1] : null;
+
+  if (!lastAttempt) {
+    return student;
+  }
+
+  const nextStudent = { ...student };
+  nextStudent.lastCategory = student.lastCategory ?? lastAttempt.category ?? student.category ?? null;
+  nextStudent.lastScoreText = student.lastScoreText ?? getAttemptScoreText(lastAttempt);
+  nextStudent.lastAttempt = lastAttempt;
+  return nextStudent;
+};
+
 const getQuizSession = (data, registrationNo) =>
   data.quizSessions && data.quizSessions[registrationNo] ? data.quizSessions[registrationNo] : null;
 
@@ -447,7 +477,7 @@ const CATEGORY_LABELS_BY_ID = {
 app.get('/api/students', async (req, res) => {
   const data = await loadData();
   const { category, quizName } = req.query;
-  let students = data.students || [];
+  let students = (data.students || []).map(enrichStudentWithAttemptMeta);
 
   const categoryFilter = category && String(category) !== '0';
   const quizNameFilter = quizName && String(quizName).trim() !== '';
@@ -477,7 +507,7 @@ app.get('/api/students', async (req, res) => {
 app.get('/api/students/:registrationNo', async (req, res) => {
   const data = await loadData();
   const student = findStudent(data, req.params.registrationNo);
-  res.json({ student: student || null });
+  res.json({ student: student ? enrichStudentWithAttemptMeta(student) : null });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -503,9 +533,10 @@ app.post('/api/login', async (req, res) => {
     student.logins = (student.logins || 0) + 1;
   }
 
+  const enrichedStudent = enrichStudentWithAttemptMeta(student);
   await saveData(data);
   const session = getQuizSession(data, registrationNo);
-  res.json({ success: true, student, session });
+  res.json({ success: true, student: enrichedStudent, session });
 });
 
 app.get('/api/quiz-session/:registrationNo', async (req, res) => {
@@ -567,9 +598,10 @@ app.post('/api/quiz-attempt', async (req, res) => {
     }
   }
 
+  const enrichedStudent = enrichStudentWithAttemptMeta(student);
   await saveData(data);
   // Return the updated student record to help clients confirm synchronization
-  res.json({ success: true, student });
+  res.json({ success: true, student: enrichedStudent });
 });
 
 app.post('/api/student-photo', async (req, res) => {
