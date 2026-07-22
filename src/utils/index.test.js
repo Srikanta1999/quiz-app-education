@@ -6,6 +6,7 @@ import {
   createRequestDeduper,
   getCategoryLabel,
   getAttemptScoreText,
+  getStudentAttemptDisplayData,
 } from '../utils';
 
 describe('timeConverter', () => {
@@ -111,5 +112,32 @@ describe('admin dashboard display helpers', () => {
     expect(getAttemptScoreText({ correctAnswers: 4, totalQuestions: 5 })).toBe('4/5');
     expect(getAttemptScoreText({ correct: 3, total: 10 })).toBe('3/10');
     expect(getAttemptScoreText({})).toBe('N/A');
+  });
+
+  it('prefers derived student metadata for the latest category and score', () => {
+    const student = {
+      lastCategory: '10',
+      lastScoreText: '3/5',
+      lastScore: 3,
+      lastTotalQuestions: 5,
+    };
+
+    expect(getStudentAttemptDisplayData(student)).toEqual({
+      category: 'Reasoning',
+      scoreText: '3/5',
+      lastAttempt: null,
+    });
+  });
+
+  it('falls back to the latest attempt from the attempts array', () => {
+    const student = {
+      attempts: [{ category: '11', correctAnswers: 4, totalQuestions: 5 }],
+    };
+
+    expect(getStudentAttemptDisplayData(student)).toEqual({
+      category: 'Coding',
+      scoreText: '4/5',
+      lastAttempt: student.attempts[0],
+    });
   });
 });

@@ -24,7 +24,7 @@ import Result from '../Result';
 import CameraCapture from '../CameraCapture';
 
 import { CATEGORIES, NUM_OF_QUESTIONS, COUNTDOWN_TIME } from '../../constants';
-import { createRequestDeduper, shuffle, getCategoryLabel, getAttemptScoreText, buildApiUrl } from '../../utils';
+import { createRequestDeduper, shuffle, getCategoryLabel, getAttemptScoreText, getStudentAttemptDisplayData, buildApiUrl } from '../../utils';
 
 const defaultQuizSettings = [
   {
@@ -1269,8 +1269,9 @@ const AdminPanel = ({ history, onLogout, isOnline, apiUrl, studentPhotos, quizSe
                 <Table.Body>
                   {displayedStudents.map(student => {
                     const attempts = student.attempts || [];
+                    const displayData = getStudentAttemptDisplayData(student);
                     const last = attempts.length ? attempts[attempts.length - 1] : null;
-                    const lastScore = getAttemptScoreText(last);
+                    const lastScore = displayData.scoreText || getAttemptScoreText(last);
                     const photo = student.photo || (studentPhotos ? studentPhotos[student.registrationNo] : null);
 
                     return (
@@ -1279,7 +1280,7 @@ const AdminPanel = ({ history, onLogout, isOnline, apiUrl, studentPhotos, quizSe
                       <Table.Cell>{student.registrationNo}</Table.Cell>
                       <Table.Cell>{student.logins}</Table.Cell>
                       <Table.Cell>{attempts.length}</Table.Cell>
-                      <Table.Cell>{getCategoryLabel(last?.category)}</Table.Cell>
+                      <Table.Cell>{displayData.category}</Table.Cell>
                       <Table.Cell>{lastScore}</Table.Cell>
                       <Table.Cell>
                         {photo ? (
@@ -1707,7 +1708,7 @@ const App = () => {
       ...attemptData,
     };
 
-    setHistory(prev => {
+    const nextStudentState = prev => {
       const existing = prev[student.registrationNo] || {
         name: student.name,
         registrationNo: student.registrationNo,
@@ -1715,14 +1716,21 @@ const App = () => {
         attempts: [],
       };
 
+      const updatedAttempts = [...(existing.attempts || []), attempt];
+      const latestAttempt = updatedAttempts[updatedAttempts.length - 1] || null;
+
       return {
         ...prev,
         [student.registrationNo]: {
           ...existing,
-          attempts: [...(existing.attempts || []), attempt],
+          attempts: updatedAttempts,
+          lastCategory: latestAttempt?.category ?? existing.lastCategory,
+          lastScoreText: getAttemptScoreText(latestAttempt) || existing.lastScoreText,
         },
       };
-    });
+    };
+
+    setHistory(prev => nextStudentState(prev));
 
     if (!isOnline) {
       console.log('Backend offline, data saved locally');
@@ -1742,7 +1750,13 @@ const App = () => {
           if (payload && payload.success && payload.student) {
             setHistory(prev => ({
               ...prev,
-              [payload.student.registrationNo]: payload.student,
+              [payload.student.registrationNo]: {
+                ...prev[payload.student.registrationNo],
+                ...payload.student,
+                attempts: payload.student.attempts || prev[payload.student.registrationNo]?.attempts || [],
+                lastCategory: payload.student.lastCategory ?? payload.student.category ?? prev[payload.student.registrationNo]?.lastCategory,
+                lastScoreText: payload.student.lastScoreText ?? getAttemptScoreText(payload.student.attempts?.[payload.student.attempts.length - 1]) ?? prev[payload.student.registrationNo]?.lastScoreText,
+              },
             }));
             // notify other parts of the app (admin panel) to refresh from server
             try {
