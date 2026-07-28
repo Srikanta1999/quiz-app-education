@@ -261,8 +261,8 @@ const enrichStudentWithAttemptMeta = student => {
   }
 
   const nextStudent = { ...student };
-  nextStudent.lastCategory = student.lastCategory ?? lastAttempt.category ?? student.category ?? null;
-  nextStudent.lastScoreText = student.lastScoreText ?? getAttemptScoreText(lastAttempt);
+  nextStudent.lastCategory = lastAttempt.category ?? student.lastCategory ?? student.category ?? null;
+  nextStudent.lastScoreText = getAttemptScoreText(lastAttempt) || student.lastScoreText;
   nextStudent.lastAttempt = lastAttempt;
   return nextStudent;
 };
