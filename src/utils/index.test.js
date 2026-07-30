@@ -103,6 +103,7 @@ describe('createRequestDeduper', () => {
 
 describe('admin dashboard display helpers', () => {
   it('formats category labels from either numeric ids or text values', () => {
+    expect(getCategoryLabel('8')).toBe('Miscellaneous');
     expect(getCategoryLabel('9')).toBe('Apptitude');
     expect(getCategoryLabel('Apptitude')).toBe('Apptitude');
     expect(getCategoryLabel('Reasoning')).toBe('Reasoning');
@@ -136,6 +137,20 @@ describe('admin dashboard display helpers', () => {
 
     expect(getStudentAttemptDisplayData(student)).toEqual({
       category: 'Coding',
+      scoreText: '4/5',
+      lastAttempt: student.attempts[0],
+    });
+  });
+
+  it('ignores placeholder metadata and uses the latest attempt values instead', () => {
+    const student = {
+      lastCategory: 'N/A',
+      lastScoreText: 'N/A',
+      attempts: [{ category: '8', correctAnswers: 4, totalQuestions: 5 }],
+    };
+
+    expect(getStudentAttemptDisplayData(student)).toEqual({
+      category: 'Miscellaneous',
       scoreText: '4/5',
       lastAttempt: student.attempts[0],
     });

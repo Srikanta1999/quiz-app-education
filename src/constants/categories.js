@@ -5,6 +5,11 @@ const CATEGORIES = [
     value: '0',
   },
   {
+    key: 8,
+    text: 'Miscellaneous',
+    value: 8,
+  },
+  {
     key: 9,
     text: 'Apptitude',
     value: 9,

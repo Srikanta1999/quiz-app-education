@@ -1,5 +1,23 @@
 import { CATEGORIES } from '../constants';
 
+const isMeaningfulValue = value => {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string') {
+    const trimmedValue = value.trim();
+    return trimmedValue !== '' && trimmedValue.toUpperCase() !== 'N/A';
+  }
+  return true;
+};
+
+const pickMeaningfulValue = (...values) => {
+  for (const value of values) {
+    if (isMeaningfulValue(value)) {
+      return value;
+    }
+  }
+  return null;
+};
+
 export const getStudentAttemptDisplayData = student => {
   if (!student || typeof student !== 'object') {
     return { category: 'N/A', scoreText: 'N/A', lastAttempt: null };
@@ -8,8 +26,8 @@ export const getStudentAttemptDisplayData = student => {
   const attempts = Array.isArray(student.attempts) ? student.attempts : [];
   const lastAttempt = attempts.length ? attempts[attempts.length - 1] : null;
 
-  const derivedCategory = student.lastCategory ?? student.category ?? lastAttempt?.category;
-  const derivedScoreText = student.lastScoreText ?? getAttemptScoreText(lastAttempt);
+  const derivedCategory = pickMeaningfulValue(lastAttempt?.category, student.lastCategory, student.category);
+  const derivedScoreText = pickMeaningfulValue(student.lastScoreText, getAttemptScoreText(lastAttempt));
 
   return {
     category: getCategoryLabel(derivedCategory),

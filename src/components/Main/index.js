@@ -201,7 +201,7 @@ const Main = ({ startQuiz, quizSettings }) => {
     const configuredTime = selectedQuiz.countdownSeconds || 0;
     const selectedCategoryKey = String(selectedQuiz.category);
     const categoryQuestions = QUESTION_DATA[selectedCategoryKey] || [];
-    const supportedCategories = ['9', '10', '11'];
+    const supportedCategories = ['8', '9', '10', '11'];
     const isSupportedCategory = supportedCategories.includes(selectedCategoryKey);
 
     const buildQuiz = (questions, count) => {
@@ -226,7 +226,7 @@ const Main = ({ startQuiz, quizSettings }) => {
       setProcessing(false);
       setError({
         message:
-          'The current quiz content supports Aptitude, Reasoning, and Coding only. Please ask the admin to select one of these categories.',
+          'The current quiz content supports Miscellaneous, Aptitude, Reasoning, and Coding only. Please ask the admin to select one of these categories.',
       });
       return;
     }
