@@ -24,7 +24,7 @@ import Result from '../Result';
 import CameraCapture from '../CameraCapture';
 
 import { CATEGORIES, NUM_OF_QUESTIONS, COUNTDOWN_TIME } from '../../constants';
-import { createRequestDeduper, shuffle, getCategoryLabel, getAttemptScoreText, buildApiUrl } from '../../utils';
+import { createRequestDeduper, shuffle, getCategoryLabel, getAttemptScoreText, getStudentAttemptDisplayData, buildApiUrl } from '../../utils';
 
 const defaultQuizSettings = [
   {
@@ -741,6 +741,16 @@ const AdminPanel = ({ history, onLogout, isOnline, apiUrl, studentPhotos, quizSe
   }, [fetchAdminData]);
 
   useEffect(() => {
+    if (!isOnline || !apiUrl) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      fetchAdminData();
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [apiUrl, fetchAdminData, isOnline]);
+
+  useEffect(() => {
     const handleSync = () => {
       fetchAdminData();
     };
@@ -1270,12 +1280,7 @@ const AdminPanel = ({ history, onLogout, isOnline, apiUrl, studentPhotos, quizSe
                   {displayedStudents.map(student => {
                     const attempts = student.attempts || [];
                     const last = attempts.length ? attempts[attempts.length - 1] : null;
-                    const fallbackCategory = last?.category ?? student.category ?? student.lastCategory;
-                    const fallbackScore = student.lastScoreText || getAttemptScoreText(last);
-                    const displayData = {
-                      category: getCategoryLabel(fallbackCategory),
-                      scoreText: fallbackScore || getAttemptScoreText(last),
-                    };
+                    const displayData = getStudentAttemptDisplayData(student);
                     const lastScore = displayData.scoreText || getAttemptScoreText(last);
                     const photo = student.photo || (studentPhotos ? studentPhotos[student.registrationNo] : null);
 
