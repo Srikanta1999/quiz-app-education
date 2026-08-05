@@ -245,6 +245,7 @@ const Login = ({ onLogin, onAdminLogin, onHodLogin, hodLoggedIn = false }) => {
               />
               <Form.Input
                 fluid
+                type="text"
                 label="Registration no."
                 placeholder="Enter your registration number"
                 value={registrationNo}
